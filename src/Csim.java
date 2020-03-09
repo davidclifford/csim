@@ -44,52 +44,20 @@ public class Csim {
         // Objects needed for rendering...
         Graphics graphics = null;
         Graphics2D g2d = null;
-        Color background = Color.BLACK;
         Random rand = new Random();
-
-        // Variables for counting frames per seconds
-        int fps = 0;
-        int frames = 0;
-        long totalTime = 0;
-        long curTime = System.currentTimeMillis();
-        long lastTime = curTime;
+        Color background = Color.BLACK;
+        g2d = bi.createGraphics();
+        g2d.setColor( background );
+        g2d.fillRect( 0, 0, xsize, ysize );
 
         while( true ) {
             try {
-                // count Frames per second...
-                lastTime = curTime;
-                curTime = System.currentTimeMillis();
-                totalTime += curTime - lastTime;
-                if( totalTime > 1000 ) {
-                    totalTime -= 1000;
-                    fps = frames;
-                    frames = 0;
-                }
-                ++frames;
-
-                // clear back buffer...
                 g2d = bi.createGraphics();
-                g2d.setColor( background );
-                g2d.fillRect( 0, 0, xsize, ysize );
 
-                // draw some rectangles...
-                for( int i = 0; i < 20; ++i ) {
-                    int r = rand.nextInt(256);
-                    int g = rand.nextInt(256);
-                    int b = rand.nextInt(256);
-                    g2d.setColor( new Color(r,g,b) );
-                    int x = rand.nextInt( xsize/2 );
-                    int y = rand.nextInt( ysize/2 );
-                    int w = rand.nextInt( xsize/2 );
-                    int h = rand.nextInt( ysize/2 );
-                    g2d.fillRect( x, y, w, h );
-                }
 
-                // display frames per second...
-                g2d.setFont( new Font( "Courier New", Font.PLAIN, 12 ) );
-                g2d.setColor( Color.GREEN );
-                g2d.drawString( String.format( "FPS: %s", fps ), 20, 20 );
 
+// Plot something before here
+// Do graphics
                 // Blit image and flip...
                 graphics = buffer.getDrawGraphics();
                 graphics.drawImage( bi, 0, 0, null );
@@ -106,5 +74,16 @@ public class Csim {
                     g2d.dispose();
             }
         }
+    }
+
+    static private void plot(int address, int colour, Graphics2D g2d) {
+        final int size = 8;
+        int x = address & 0xFF;
+        int y = address >> 8;
+        int r = ((colour>>4)&3)<<6;
+        int g = ((colour>>2)&3)<<6;
+        int b = ((colour&3)<<6);
+        g2d.setColor(new Color(r,g,b));
+        g2d.fillRect(x*size, y*size, size, size);
     }
 }
