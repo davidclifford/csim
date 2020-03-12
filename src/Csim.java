@@ -1,22 +1,36 @@
 import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.util.Random;
-import javax.swing.JFrame;
+import javax.swing.*;
 
 /*
  * This is an example of a simple windowed render loop
  */
 public class Csim {
 
+    static Graphics2D g2d = null;
+
     public static void main( String[] args ) {
 
         int  xsize = 1280;
         int  ysize = 960;
+
         // Create game window...
-        JFrame app = new JFrame();
-        app.setIgnoreRepaint( true );
-        app.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
+        JFrame frame = new JFrame();
+        frame.setIgnoreRepaint( true );
+        frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
+
+        JFrame tty = new JFrame();
+        JPanel panel = new JPanel(true);
+        JTextArea text = new JTextArea(100,100);
+        panel.add(text);
+        tty.setSize(xsize, ysize);
+        tty.add(panel);
+        tty.setVisible( true );
+
 
         // Create canvas for painting...
         Canvas canvas = new Canvas();
@@ -24,9 +38,9 @@ public class Csim {
         canvas.setSize( xsize, ysize );
 
         // Add canvas to game window...
-        app.add( canvas );
-        app.pack();
-        app.setVisible( true );
+        frame.add( canvas );
+        frame.pack();
+        frame.setVisible( true );
 
         // Create BackBuffer...
         canvas.createBufferStrategy( 2 );
@@ -43,7 +57,6 @@ public class Csim {
 
         // Objects needed for rendering...
         Graphics graphics = null;
-        Graphics2D g2d = null;
         Random rand = new Random();
         Color background = Color.BLACK;
         g2d = bi.createGraphics();
@@ -53,10 +66,12 @@ public class Csim {
         while( true ) {
             try {
                 g2d = bi.createGraphics();
-
-
-
-// Plot something before here
+// Plot below here
+                int x = rand.nextInt(160);
+                int y = rand.nextInt(120);
+                int c = rand.nextInt(64);
+                plot(y<<8 | x, c);
+// Plot something above here
 // Do graphics
                 // Blit image and flip...
                 graphics = buffer.getDrawGraphics();
@@ -76,7 +91,7 @@ public class Csim {
         }
     }
 
-    static private void plot(int address, int colour, Graphics2D g2d) {
+    static private void plot(int address, int colour) {
         final int size = 8;
         int x = address & 0xFF;
         int y = address >> 8;
@@ -87,34 +102,32 @@ public class Csim {
         g2d.fillRect(x*size, y*size, size, size);
     }
 }
-////////////////////////////////////
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-
-import javax.swing.JFrame;
-import javax.swing.JTextField;
-
-public class Main {
-  public static void main(String[] argv) throws Exception {
-    JTextField component = new JTextField();
-    component.addKeyListener(new MyKeyListener());
-
-    JFrame f = new JFrame();
-
-    f.add(component);
-    f.setSize(300, 300);
-    f.setVisible(true);
-
-  }
-}
-
-class MyKeyListener extends KeyAdapter {
-  public void keyPressed(KeyEvent evt) {
-    if (evt.getKeyChar() == 'a') {
-      System.out.println("Check for key characters: " + evt.getKeyChar());
-    }
-    if (evt.getKeyCode() == KeyEvent.VK_HOME) {
-      System.out.println("Check for key codes: " + evt.getKeyCode());
-    }
-  }
-}
+/////////////////////////////////////
+//public class Test2 {
+//    public static void main(String[] args) {
+//        JFrame ablak = new JFrame("Snake game");
+//        ablak.setVisible(true);
+//        ablak.setSize(new Dimension(600,600));
+//        ablak.setFocusable(true);
+//        ablak.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+//        ablak.addKeyListener(new KeyListener(){
+//             @Override
+//                public void keyPressed(KeyEvent e) {
+//                    if(e.getKeyCode() == KeyEvent.VK_UP){
+//                        System.out.println("Hi");
+//                    }
+//                }
+//
+//                @Override
+//                public void keyTyped(KeyEvent e) {
+//                    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+//                }
+//
+//                @Override
+//                public void keyReleased(KeyEvent e) {
+//                    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+//                }
+//        });
+//        ablak.setVisible(true);
+//    }
+//}
