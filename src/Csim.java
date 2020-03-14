@@ -5,6 +5,7 @@ import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 import javax.swing.*;
+import javax.swing.text.DefaultCaret;
 
 /*
  * This is an example of a simple windowed render loop
@@ -12,6 +13,7 @@ import javax.swing.*;
 public class Csim {
 
     static Graphics2D g2d = null;
+    static String keys = "";
 
     public static void main( String[] args ) {
 
@@ -24,13 +26,42 @@ public class Csim {
         frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
 
         JFrame tty = new JFrame();
+        tty.setIgnoreRepaint( true );
+        tty.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
         JPanel panel = new JPanel(true);
-        JTextArea text = new JTextArea(100,100);
-        panel.add(text);
+        Font font = new Font("Courier", Font.BOLD,12);
+        JTextArea text = new JTextArea(50,100);
+        text.setFont(font);
+        text.setEditable(false);
+        text.setBackground(Color.BLACK);
+        text.setForeground(Color.WHITE);
+        DefaultCaret caret = (DefaultCaret)text.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+        text.addKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+                System.out.println("keyTyped");
+                keys = keys + e.getKeyChar();
+            }
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+                System.out.println("keyPressed");
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+                System.out.println("keyReleased");
+            }
+        });
+        text.setFocusable(true);
+        JScrollPane scrollPane = new JScrollPane(text);
+        panel.add(scrollPane);
         tty.setSize(xsize, ysize);
         tty.add(panel);
         tty.setVisible( true );
-
+        tty.setState(JFrame.ICONIFIED);
+        tty.setState(JFrame.NORMAL);
 
         // Create canvas for painting...
         Canvas canvas = new Canvas();
@@ -71,6 +102,9 @@ public class Csim {
                 int y = rand.nextInt(120);
                 int c = rand.nextInt(64);
                 plot(y<<8 | x, c);
+                text.append(keys);
+                keys = "";
+//                text.append("--->\n");
 // Plot something above here
 // Do graphics
                 // Blit image and flip...
