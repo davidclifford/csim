@@ -3,6 +3,10 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
+import java.io.EOFException;
+import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Random;
@@ -48,12 +52,12 @@ public class Csim {
 
             @Override
             public void keyPressed(KeyEvent e) {
-                System.out.println("keyPressed");
+
             }
 
             @Override
             public void keyReleased(KeyEvent e) {
-                System.out.println("keyReleased");
+
             }
         });
         text.setFocusable(true);
@@ -97,7 +101,7 @@ public class Csim {
         g2d.fillRect( 0, 0, xsize, ysize );
 
 // Initialize simulation
-        boolean debug = true;
+        boolean debug = false;
         int PC = 0x8000;
         int A = 0;
         int B = 0;
@@ -165,21 +169,29 @@ public class Csim {
         };
 
         // Load in binary files for ALU, Decode, Rom and Ram
-        byte[] ALURom = null;
+        byte[] ALURom = new byte [0x400000];
         byte[] DecodeRom = null;
         byte[] Rom = new byte [0x8000];
         byte[] Ram = new byte [0x8000];
 
+        read_bytes("alu.bin", ALURom);
+
         try {
-            ALURom = Files.readAllBytes(Paths.get("alu.bin"));
+//            ALURom = Files.readAllBytes(Paths.get("alu.bin"));
             DecodeRom = Files.readAllBytes(Paths.get("27Cucode.bin"));
             Rom = Files.readAllBytes(Paths.get("instr.bin"));
-            Ram = Files.readAllBytes(Paths.get("video_strings.bin"));
+            byte [] RAM = Files.readAllBytes(Paths.get("video_strings.bin"));
+            System.arraycopy(RAM, 0, Ram, 0, RAM.length);
         } catch(Exception e) {
             System.out.println(e.getMessage());
         }
 
         // Do simulation loop
+//        System.out.printf("\n%06x ", ALURom.length);
+//        for (int x = 0; x<1024000; x++) {
+//            if (x%16 ==0) System.out.printf("\n%06x ", x);
+//            System.out.printf("%02x ", ALURom[x]);
+//        }
 
         while( true ) {
             try {
@@ -188,13 +200,13 @@ public class Csim {
                 // Work out the decode ROM index
                 int decodeidx = (IR << IRSHIFT) | phase;
                 // Get the microinstruction
-                int uinst = ((DecodeRom[decodeidx*2+1] << 8) | (DecodeRom[decodeidx*2]))&0xffff;
+                int uinst = (((DecodeRom[decodeidx*2+1]&0xff) << 8) | (DecodeRom[decodeidx*2])&0xff);
 
-                int carry = 0;
-                int overflow = 0;
-                int zero = 0;
-                int negative = 0;
-                int divbyzero = 0;
+                boolean carry = false;
+                boolean overflow = false;
+                boolean zero = false;
+                boolean negative = false;
+                boolean divbyzero = false;
 
                 // Decode the microinstruction
                 int aluop = uinst & ALUOP;
@@ -213,19 +225,19 @@ public class Csim {
                 int databus = 0;
                 if (dbusop == ALURESULT) {
                     int alu_addr = ((aluop << 16) | (A << 8) | B) * 2;
-                    int aluresult = (ALURom[alu_addr + 1] << 8) | (ALURom[alu_addr]);
+                    int aluresult = ((ALURom[alu_addr+1]&0xff) << 8) | (ALURom[alu_addr]&0xff);
                     if (debug) {
                         System.out.printf("AB %02x %02x %s %04x \n", A, B, ALUop[aluop], aluresult);
                     }
 
                     // Extract the flags from the result, and remove from the result
-                    carry = (aluresult >> CSHIFT) & 1;
-                    overflow = (aluresult >> VSHIFT) & 1;
-                    zero = (aluresult >> ZSHIFT) & 1;
-                    negative = (aluresult >> NSHIFT) & 1;
-                    divbyzero = (aluresult >> DSHIFT) & 1;
+                    carry = ((aluresult >> CSHIFT) & 1) == 1;
+                    overflow = ((aluresult >> VSHIFT) & 1) == 1;
+                    zero = ((aluresult >> ZSHIFT) & 1) == 1;
+                    negative = ((aluresult >> NSHIFT) & 1) == 1;
+                    divbyzero = ((aluresult >> DSHIFT) & 1) == 1;
                     if (debug) {
-                        System.out.printf("FL %d%d%d%d%d\n", carry, overflow, zero, negative, divbyzero);
+                        System.out.printf("FL %b %b %b %b %b\n", carry, overflow, zero, negative, divbyzero);
                     }
                     databus = aluresult & 0xff;
                 }
@@ -233,7 +245,7 @@ public class Csim {
                 // Determine the address on the address bus: AR or PC
                 int address = 0;
                 if (arena == 0) {
-                    address = (AH << 8) | AL;
+                    address = (AH << 8)&0xff | AL;
                     if (debug) {
                         System.out.printf("AR %02x%02x\n", AH, AL);
                     }
@@ -247,9 +259,9 @@ public class Csim {
                 // Get the memory value
                 if (dbusop == MEMRESULT) {
                     if (address >= 0x8000)
-                        databus = Ram[address-0x8000];
+                        databus = Ram[address-0x8000]&0xff;
                     else
-                        databus = Rom[address];
+                        databus = Rom[address]&0xff;
                 }
 
                 // Read UART
@@ -287,7 +299,7 @@ public class Csim {
                     if (address >= 0x8000) {
                         Ram[address - 0x8000] = (byte) databus;
                         if (debug)
-                            System.out.printf("->RAM %04x %02x", address - 0x8000, Ram[address - 0x8000]);
+                            System.out.printf("->RAM %04x %02x\n", address - 0x8000, Ram[address - 0x8000]);
                     } else {
                         plot(address, databus);
                     }
@@ -304,16 +316,61 @@ public class Csim {
                 }
                 if (loadop == 7) {
                     System.out.printf("%c", databus); // Flush the output
+                    text.append(""+(char)databus);
                     if (debug)
                         System.out.printf("->IO %c", databus);
                 }
-// Plot below here
 
-                text.append(keys);
-                keys = "";
-//                text.append("--->\n");
-// Plot something above here
-// Do graphics
+                //    Increment the PC and the phase
+                if (pcincr == 1)
+                    PC = PC + 1;
+                if (usreset == 0) {
+                    phase = 0;
+                } else {
+                    phase = (phase+1) & 0xf;
+                }
+
+                //    Do any jumps
+                if (jumpop == 1 && carry) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JC ");
+                }
+
+                if (jumpop == 2 && overflow) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JO ");
+                }
+                if (jumpop == 3 && zero) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JZ ");
+                }
+                if (jumpop == 4 && negative) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JN ");
+                }
+                if (jumpop == 5 && divbyzero) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JD ");
+                }
+                if (jumpop == 7 && keys.length() == 0) {
+                    PC = address;
+                    if (debug)
+                        System.out.print("JI ");
+                }
+                //    Exit if PC goes to $FFFF
+                if (PC == 0xffff) {
+                    if (debug)
+                        System.out.println();
+                    break;
+                }
+
+/////////////////////////////////
+                // Do graphics
                 // Blit image and flip...
                 graphics = buffer.getDrawGraphics();
                 graphics.drawImage( bi, 0, 0, null );
@@ -332,14 +389,27 @@ public class Csim {
         }
     }
 
-    static private void plot(int address, int colour) {
+    static private void plot(int addr, int colour) {
         final int size = 8;
-        int x = address & 0xFF;
-        int y = address >> 8;
+        int x = addr & 0xFF;
+        int y = addr >> 8;
         int r = ((colour>>4)&3)<<6;
         int g = ((colour>>2)&3)<<6;
         int b = ((colour&3)<<6);
         g2d.setColor(new Color(r,g,b));
         g2d.fillRect(x*size, y*size, size, size);
+    }
+
+    static private void read_bytes(String filename, byte data[]) {
+        try {
+            DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(filename)));
+            int addr = 0;
+            while (true) {
+                data[addr++] = (byte) in.readUnsignedByte();
+            }
+        } catch (EOFException e) {
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
     }
 }
