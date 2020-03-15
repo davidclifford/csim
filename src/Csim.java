@@ -3,6 +3,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Random;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
@@ -40,7 +42,7 @@ public class Csim {
         text.addKeyListener(new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
-                System.out.println("keyTyped");
+//                System.out.println("keyTyped");
                 keys = keys + e.getKeyChar();
             }
 
@@ -94,14 +96,219 @@ public class Csim {
         g2d.setColor( background );
         g2d.fillRect( 0, 0, xsize, ysize );
 
+// Initialize simulation
+        boolean debug = true;
+        int PC = 0x8000;
+        int A = 0;
+        int B = 0;
+        int AH = 0;
+        int AL = 0;
+        int IR = 0;
+        int phase = 0;
+
+        int ALUOP    = 0x001f;
+        int LOADOP   = 0x0007;
+        int LOADSHIFT = 5;
+        int DBUSOP   = 0x0003;
+        int DBUSSHIFT = 8;
+        int JUMPOP   = 0x0007;
+        int JUMPSHIFT = 10;
+        int ARENA    = 0x0001;
+        int ARSHIFT = 13; // Active low
+        int PCINCR   = 0x0001;
+        int PCSHIFT = 14;
+        int USRESET  = 0x0001;
+        int USSHIFT = 15; // Active low
+        int IRSHIFT  = 4;
+        int CSHIFT = 8;
+        int VSHIFT = 9;
+        int ZSHIFT = 10;
+        int NSHIFT = 11;
+        int DSHIFT = 12;
+        int MEMRESULT = 0;
+        int ALURESULT = 1;
+        int UARTRESULT = 2;
+
+        String [] ALUop = {
+            "0",
+            "A",
+            "B",
+            "-A",
+            "-B",
+            "A+1",
+            "B+1",
+            "A-1",
+            "B-1",
+            "A+B",
+            "A+B+1",
+            "A-B",
+            "A-Bspecial",
+            "B-A",
+            "A-B-1",
+            "B-A-1",
+            "A*BHI",
+            "A*BLO",
+            "A/B",
+            "A%B",
+            "A<<B",
+            "A>>BL",
+            "A>>BA",
+            "AROLB",
+            "ARORB",
+            "A&B",
+            "A|B",
+            "A^B",
+            "!A",
+            "!B",
+            "ADIVB",
+            "AREMB"
+        };
+
+        // Load in binary files for ALU, Decode, Rom and Ram
+        byte[] ALURom = null;
+        byte[] DecodeRom = null;
+        byte[] Rom = new byte [0x8000];
+        byte[] Ram = new byte [0x8000];
+
+        try {
+            ALURom = Files.readAllBytes(Paths.get("alu.bin"));
+            DecodeRom = Files.readAllBytes(Paths.get("27Cucode.bin"));
+            Rom = Files.readAllBytes(Paths.get("instr.bin"));
+            Ram = Files.readAllBytes(Paths.get("video_strings.bin"));
+        } catch(Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        // Do simulation loop
+
         while( true ) {
             try {
                 g2d = bi.createGraphics();
+
+                // Work out the decode ROM index
+                int decodeidx = (IR << IRSHIFT) | phase;
+                // Get the microinstruction
+                int uinst = ((DecodeRom[decodeidx*2+1] << 8) | (DecodeRom[decodeidx*2]))&0xffff;
+
+                int carry = 0;
+                int overflow = 0;
+                int zero = 0;
+                int negative = 0;
+                int divbyzero = 0;
+
+                // Decode the microinstruction
+                int aluop = uinst & ALUOP;
+                int loadop = (uinst >> LOADSHIFT) & LOADOP;
+                int dbusop = (uinst >> DBUSSHIFT) & DBUSOP;
+                int jumpop = (uinst >> JUMPSHIFT) & JUMPOP;
+                int arena = (uinst >> ARSHIFT) & ARENA;
+                int pcincr = (uinst >> PCSHIFT) & PCINCR;
+                int usreset = (uinst >> USSHIFT) & USRESET;
+                if (debug) {
+                    System.out.printf("PC %04x IR %02x p %01x ui %04x upa %d%d%d \n",
+                            PC, IR, phase, uinst, usreset, pcincr, arena);
+                }
+
+                // Do the ALU operation.
+                int databus = 0;
+                if (dbusop == ALURESULT) {
+                    int alu_addr = ((aluop << 16) | (A << 8) | B) * 2;
+                    int aluresult = (ALURom[alu_addr + 1] << 8) | (ALURom[alu_addr]);
+                    if (debug) {
+                        System.out.printf("AB %02x %02x %s %04x \n", A, B, ALUop[aluop], aluresult);
+                    }
+
+                    // Extract the flags from the result, and remove from the result
+                    carry = (aluresult >> CSHIFT) & 1;
+                    overflow = (aluresult >> VSHIFT) & 1;
+                    zero = (aluresult >> ZSHIFT) & 1;
+                    negative = (aluresult >> NSHIFT) & 1;
+                    divbyzero = (aluresult >> DSHIFT) & 1;
+                    if (debug) {
+                        System.out.printf("FL %d%d%d%d%d\n", carry, overflow, zero, negative, divbyzero);
+                    }
+                    databus = aluresult & 0xff;
+                }
+
+                // Determine the address on the address bus: AR or PC
+                int address = 0;
+                if (arena == 0) {
+                    address = (AH << 8) | AL;
+                    if (debug) {
+                        System.out.printf("AR %02x%02x\n", AH, AL);
+                    }
+                } else {
+                    address = PC;
+                    if (debug) {
+                        System.out.printf("PC %04x \n", PC);
+                    }
+                }
+
+                // Get the memory value
+                if (dbusop == MEMRESULT) {
+                    if (address >= 0x8000)
+                        databus = Ram[address-0x8000];
+                    else
+                        databus = Rom[address];
+                }
+
+                // Read UART
+                 if (dbusop == UARTRESULT) {
+                     if (keys.length() > 0) {
+                         databus = keys.charAt(0);
+                         if (loadop != 0) {
+                             keys = keys.substring(1);
+                         }
+                     } else {
+                         databus = 0;
+                     }
+                 }
+
+                 if (debug)
+                    System.out.printf("dop %x dbus %02x \n", dbusop, databus);
+
+                 //Load from the data bus
+                if (loadop == 1) {
+                    IR = databus;
+                    if (debug)
+                        System.out.printf("->IR %02x\n", IR);
+                }
+                if (loadop == 2) {
+                    A = databus;
+                    if (debug)
+                        System.out.printf("->A %02x\n", A);
+                }
+                if (loadop == 3) {
+                    B = databus;
+                    if (debug)
+                        System.out.printf("->B %02x\n", B);
+                }
+                if (loadop == 4) {
+                    if (address >= 0x8000) {
+                        Ram[address - 0x8000] = (byte) databus;
+                        if (debug)
+                            System.out.printf("->RAM %04x %02x", address - 0x8000, Ram[address - 0x8000]);
+                    } else {
+                        plot(address, databus);
+                    }
+                }
+                if (loadop == 5) {
+                    AH = databus;
+                    if (debug)
+                        System.out.printf("->AH %02x\n", AH);
+                }
+                if (loadop == 6) {
+                    AL = databus;
+                    if (debug)
+                        System.out.printf("->AL %02x\n", AL);
+                }
+                if (loadop == 7) {
+                    System.out.printf("%c", databus); // Flush the output
+                    if (debug)
+                        System.out.printf("->IO %c", databus);
+                }
 // Plot below here
-                int x = rand.nextInt(160);
-                int y = rand.nextInt(120);
-                int c = rand.nextInt(64);
-                plot(y<<8 | x, c);
+
                 text.append(keys);
                 keys = "";
 //                text.append("--->\n");
@@ -136,32 +343,3 @@ public class Csim {
         g2d.fillRect(x*size, y*size, size, size);
     }
 }
-/////////////////////////////////////
-//public class Test2 {
-//    public static void main(String[] args) {
-//        JFrame ablak = new JFrame("Snake game");
-//        ablak.setVisible(true);
-//        ablak.setSize(new Dimension(600,600));
-//        ablak.setFocusable(true);
-//        ablak.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-//        ablak.addKeyListener(new KeyListener(){
-//             @Override
-//                public void keyPressed(KeyEvent e) {
-//                    if(e.getKeyCode() == KeyEvent.VK_UP){
-//                        System.out.println("Hi");
-//                    }
-//                }
-//
-//                @Override
-//                public void keyTyped(KeyEvent e) {
-//                    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-//                }
-//
-//                @Override
-//                public void keyReleased(KeyEvent e) {
-//                    throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-//                }
-//        });
-//        ablak.setVisible(true);
-//    }
-//}
