@@ -20,6 +20,10 @@ public class Csim {
 
     static Graphics2D g2d = null;
     static String keys = "";
+    static BufferedImage bi = null;
+    static Graphics graphics = null;
+    static BufferStrategy buffer = null;
+    static long time = 0;
 
     public static void main( String[] args ) {
 
@@ -81,7 +85,7 @@ public class Csim {
 
         // Create BackBuffer...
         canvas.createBufferStrategy( 2 );
-        BufferStrategy buffer = canvas.getBufferStrategy();
+        buffer = canvas.getBufferStrategy();
 
         // Get graphics configuration...
         GraphicsEnvironment ge =
@@ -90,11 +94,9 @@ public class Csim {
         GraphicsConfiguration gc = gd.getDefaultConfiguration();
 
         // Create off-screen drawing surface
-        BufferedImage bi = gc.createCompatibleImage( xsize, ysize );
+        bi = gc.createCompatibleImage( xsize, ysize );
 
         // Objects needed for rendering...
-        Graphics graphics = null;
-        Random rand = new Random();
         Color background = Color.BLACK;
         g2d = bi.createGraphics();
         g2d.setColor( background );
@@ -169,38 +171,36 @@ public class Csim {
         };
 
         // Load in binary files for ALU, Decode, Rom and Ram
-        byte[] ALURom = new byte [0x400000];
-        byte[] DecodeRom = null;
-        byte[] Rom = new byte [0x8000];
-        byte[] Ram = new byte [0x8000];
+        char[] ALURom = new char [0x400000];
+        char[] DecodeRom = new char [0x20000];
+        char[] Rom = new char [0x8000];
+        char[] Ram = new char [0x8000];
 
-        read_bytes("alu.bin", ALURom);
 
         try {
-//            ALURom = Files.readAllBytes(Paths.get("alu.bin"));
-            DecodeRom = Files.readAllBytes(Paths.get("27Cucode.bin"));
-            Rom = Files.readAllBytes(Paths.get("instr.bin"));
-            byte [] RAM = Files.readAllBytes(Paths.get("video_strings.bin"));
-            System.arraycopy(RAM, 0, Ram, 0, RAM.length);
+            read_bytes("alu.bin", ALURom);
+            read_bytes("27Cucode.bin", DecodeRom);
+            read_bytes("instr.bin", Rom);
+            read_bytes("../CSCvon8/Examples/print-16.bin", Ram);
         } catch(Exception e) {
             System.out.println(e.getMessage());
         }
 
         // Do simulation loop
-//        System.out.printf("\n%06x ", ALURom.length);
-//        for (int x = 0; x<1024000; x++) {
-//            if (x%16 ==0) System.out.printf("\n%06x ", x);
-//            System.out.printf("%02x ", ALURom[x]);
+//        System.out.printf("\n%06x ", Rom.length);
+//        for (int x = 0; x<0x1000; x++) {
+//            if (x%16 == 0) System.out.printf("\n%04x ", x);
+//            System.out.printf("%02x ", (byte)DecodeRom[x]);
 //        }
 
         while( true ) {
             try {
-                g2d = bi.createGraphics();
+//                g2d = bi.createGraphics();
 
                 // Work out the decode ROM index
                 int decodeidx = (IR << IRSHIFT) | phase;
                 // Get the microinstruction
-                int uinst = (((DecodeRom[decodeidx*2+1]&0xff) << 8) | (DecodeRom[decodeidx*2])&0xff);
+                int uinst = ((((char)DecodeRom[decodeidx*2+1]) << 8) | ((char)DecodeRom[decodeidx*2]));
 
                 boolean carry = false;
                 boolean overflow = false;
@@ -245,9 +245,10 @@ public class Csim {
                 // Determine the address on the address bus: AR or PC
                 int address = 0;
                 if (arena == 0) {
-                    address = (AH << 8)&0xff | AL;
+                    address = ((char)AH) << 8 | AL;
                     if (debug) {
                         System.out.printf("AR %02x%02x\n", AH, AL);
+                        System.out.printf("AR %04x\n", address);
                     }
                 } else {
                     address = PC;
@@ -259,9 +260,9 @@ public class Csim {
                 // Get the memory value
                 if (dbusop == MEMRESULT) {
                     if (address >= 0x8000)
-                        databus = Ram[address-0x8000]&0xff;
+                        databus = (char)Ram[address-0x8000];
                     else
-                        databus = Rom[address]&0xff;
+                        databus = (char)Rom[address];
                 }
 
                 // Read UART
@@ -297,9 +298,9 @@ public class Csim {
                 }
                 if (loadop == 4) {
                     if (address >= 0x8000) {
-                        Ram[address - 0x8000] = (byte) databus;
+                        Ram[address - 0x8000] = (char)databus;
                         if (debug)
-                            System.out.printf("->RAM %04x %02x\n", address - 0x8000, Ram[address - 0x8000]);
+                            System.out.printf("->RAM %04x %02x\n", address - 0x8000, (byte)Ram[address - 0x8000]);
                     } else {
                         plot(address, databus);
                     }
@@ -369,13 +370,15 @@ public class Csim {
                     break;
                 }
 
-/////////////////////////////////
                 // Do graphics
-                // Blit image and flip...
-                graphics = buffer.getDrawGraphics();
-                graphics.drawImage( bi, 0, 0, null );
-                if( !buffer.contentsLost() )
-                    buffer.show();
+                // Blit image and flip every so often
+                if (System.currentTimeMillis() - time > 250) {
+                    graphics = buffer.getDrawGraphics();
+                    graphics.drawImage(bi, 0, 0, null);
+                    if (!buffer.contentsLost())
+                        buffer.show();
+                    time = System.currentTimeMillis();
+                }
 
                 // Let the OS have a little time...
                 Thread.yield();
@@ -396,16 +399,17 @@ public class Csim {
         int r = ((colour>>4)&3)<<6;
         int g = ((colour>>2)&3)<<6;
         int b = ((colour&3)<<6);
+        g2d = bi.createGraphics();
         g2d.setColor(new Color(r,g,b));
         g2d.fillRect(x*size, y*size, size, size);
     }
 
-    static private void read_bytes(String filename, byte data[]) {
+    static private void read_bytes(String filename, char data[]) {
         try {
             DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(filename)));
             int addr = 0;
             while (true) {
-                data[addr++] = (byte) in.readUnsignedByte();
+                data[addr++] = (char) in.readUnsignedByte();
             }
         } catch (EOFException e) {
         } catch (Exception e) {
