@@ -7,11 +7,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.FileInputStream;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Random;
 import javax.swing.*;
-import javax.swing.text.DefaultCaret;
 
 /*
  * This is an example of a simple windowed render loop
@@ -30,48 +26,15 @@ public class Csim {
         int  xsize = 1280;
         int  ysize = 960;
 
+        String executable = "stripes.bin";
+        if (args.length > 0) {
+            executable = args[0];
+        }
+
         // Create game window...
         JFrame frame = new JFrame();
         frame.setIgnoreRepaint( true );
         frame.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
-
-        JFrame tty = new JFrame();
-        tty.setIgnoreRepaint( true );
-        tty.setDefaultCloseOperation( JFrame.EXIT_ON_CLOSE );
-        JPanel panel = new JPanel(true);
-        Font font = new Font("Courier", Font.BOLD,12);
-        JTextArea text = new JTextArea(50,100);
-        text.setFont(font);
-        text.setEditable(false);
-        text.setBackground(Color.BLACK);
-        text.setForeground(Color.WHITE);
-        DefaultCaret caret = (DefaultCaret)text.getCaret();
-        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
-        text.addKeyListener(new KeyListener() {
-            @Override
-            public void keyTyped(KeyEvent e) {
-//                System.out.println("keyTyped");
-                keys = keys + e.getKeyChar();
-            }
-
-            @Override
-            public void keyPressed(KeyEvent e) {
-
-            }
-
-            @Override
-            public void keyReleased(KeyEvent e) {
-
-            }
-        });
-        text.setFocusable(true);
-        JScrollPane scrollPane = new JScrollPane(text);
-        panel.add(scrollPane);
-        tty.setSize(xsize, ysize);
-        tty.add(panel);
-        tty.setVisible( true );
-        tty.setState(JFrame.ICONIFIED);
-        tty.setState(JFrame.NORMAL);
 
         // Create canvas for painting...
         Canvas canvas = new Canvas();
@@ -102,9 +65,46 @@ public class Csim {
         g2d.setColor( background );
         g2d.fillRect( 0, 0, xsize, ysize );
 
-// Initialize simulation
+        frame.addKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+//                System.out.println("keyTyped");
+                keys = keys + e.getKeyChar();
+            }
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+
+            }
+        });
+        frame.setFocusable(true);
+        canvas.addKeyListener(new KeyListener() {
+            @Override
+            public void keyTyped(KeyEvent e) {
+//                System.out.println("keyTyped");
+                keys = keys + e.getKeyChar();
+            }
+
+            @Override
+            public void keyPressed(KeyEvent e) {
+
+            }
+
+            @Override
+            public void keyReleased(KeyEvent e) {
+
+            }
+        });
+        canvas.setFocusable(true);
+
+        // Initialize simulation
         boolean debug = false;
-        int PC = 0x8000;
+        int PC = 0x0000;
         int A = 0;
         int B = 0;
         int AH = 0;
@@ -181,22 +181,14 @@ public class Csim {
             read_bytes("alu.bin", ALURom);
             read_bytes("27Cucode.bin", DecodeRom);
             read_bytes("instr.bin", Rom);
-            read_bytes("../CSCvon8/Examples/print-16.bin", Ram);
+            read_bytes(executable, Ram);
         } catch(Exception e) {
             System.out.println(e.getMessage());
+            System.exit(1);
         }
-
-        // Do simulation loop
-//        System.out.printf("\n%06x ", Rom.length);
-//        for (int x = 0; x<0x1000; x++) {
-//            if (x%16 == 0) System.out.printf("\n%04x ", x);
-//            System.out.printf("%02x ", (byte)DecodeRom[x]);
-//        }
 
         while( true ) {
             try {
-//                g2d = bi.createGraphics();
-
                 // Work out the decode ROM index
                 int decodeidx = (IR << IRSHIFT) | phase;
                 // Get the microinstruction
@@ -317,7 +309,7 @@ public class Csim {
                 }
                 if (loadop == 7) {
                     System.out.printf("%c", databus); // Flush the output
-                    text.append(""+(char)databus);
+//                    text.append(""+(char)databus);
                     if (debug)
                         System.out.printf("->IO %c", databus);
                 }
