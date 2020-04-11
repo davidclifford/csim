@@ -26,9 +26,23 @@ public class Csim {
         int  xsize = 1280;
         int  ysize = 960;
 
+        boolean debug = false;
+        int PC = 0x8000;
+
         String executable = "stripes.bin";
         if (args.length > 0) {
-            executable = args[0];
+            for (String arg: args){
+                if (arg.equals("-m")) {
+                    PC = 0x0000;
+                } else if (arg.equals("-d")) {
+                    debug = true;
+                } else if (arg.startsWith("-")) {
+                        System.out.printf("Unknown option %s", arg);
+                        System.exit(1);
+                } else {
+                    executable = arg;
+                }
+            }
         }
 
         // Create game window...
@@ -103,8 +117,6 @@ public class Csim {
         canvas.setFocusable(true);
 
         // Initialize simulation
-        boolean debug = false;
-        int PC = 0x0000;
         int A = 0;
         int B = 0;
         int AH = 0;
@@ -364,7 +376,7 @@ public class Csim {
 
                 // Do graphics
                 // Blit image and flip every so often
-                if (System.currentTimeMillis() - time > 250) {
+                if (System.currentTimeMillis() - time > 20) {
                     graphics = buffer.getDrawGraphics();
                     graphics.drawImage(bi, 0, 0, null);
                     if (!buffer.contentsLost())
