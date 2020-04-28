@@ -146,6 +146,7 @@ public class Csim {
         int MEMRESULT = 0;
         int ALURESULT = 1;
         int UARTRESULT = 2;
+        int VIDRESULT = 3;
 
         String [] ALUop = {
             "0",
@@ -187,11 +188,12 @@ public class Csim {
         char[] DecodeRom = new char [0x20000];
         char[] Rom = new char [0x8000];
         char[] Ram = new char [0x8000];
+        char[] Vram = new char [0x8000];
 
 
         try {
             read_bytes("alu.bin", ALURom);
-            read_bytes("27Cucode.bin", DecodeRom);
+            read_bytes("27Cucode.rom", DecodeRom);
             read_bytes("instr.bin", Rom);
             read_bytes(executable, Ram);
         } catch(Exception e) {
@@ -269,6 +271,14 @@ public class Csim {
                         databus = (char)Rom[address];
                 }
 
+                // Get the video memory value
+                if (dbusop == VIDRESULT) {
+                    if (address >= 0x8000)
+                        databus = (char)Vram[address-0x8000];
+                    else
+                        databus = (char)Vram[address];
+                }
+
                 // Read UART
                  if (dbusop == UARTRESULT) {
                      if (keys.length() > 0) {
@@ -307,6 +317,9 @@ public class Csim {
                             System.out.printf("->RAM %04x %02x\n", address - 0x8000, (byte)Ram[address - 0x8000]);
                     } else {
                         plot(address, databus);
+                        Vram[address] = (char)databus;
+                        if (debug)
+                            System.out.printf("->VRAM %04x %02x\n", address, (byte)Vram[address]);
                     }
                 }
                 if (loadop == 5) {
@@ -321,7 +334,6 @@ public class Csim {
                 }
                 if (loadop == 7) {
                     System.out.printf("%c", databus); // Flush the output
-//                    text.append(""+(char)databus);
                     if (debug)
                         System.out.printf("->IO %c", databus);
                 }
