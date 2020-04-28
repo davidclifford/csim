@@ -183,7 +183,7 @@ public class Csim {
             "AREMB"
         };
 
-        // Load in binary files for ALU, Decode, Rom and Ram
+        // Load in binary files for ALU, Decode, Rom, Ram and Vram
         char[] ALURom = new char [0x400000];
         char[] DecodeRom = new char [0x20000];
         char[] Rom = new char [0x8000];
