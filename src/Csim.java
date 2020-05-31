@@ -410,14 +410,27 @@ public class Csim {
 
     static private void plot(int addr, int colour) {
         final int size = 8;
+        final int half = size/2;
         int x = addr & 0xFF;
         int y = addr >> 8;
-        int r = ((colour>>4)&3)<<6;
-        int g = ((colour>>2)&3)<<6;
-        int b = ((colour&3)<<6);
-        g2d = bi.createGraphics();
-        g2d.setColor(new Color(r,g,b));
-        g2d.fillRect(x*size, y*size, size, size);
+        if (colour < 128) {
+            int r = ((colour >> 4) & 3) << 6;
+            int g = ((colour >> 2) & 3) << 6;
+            int b = ((colour & 3) << 6);
+            g2d = bi.createGraphics();
+            g2d.setColor(new Color(r, g, b));
+            g2d.fillRect(x * size, y * size, size, size);
+        } else {
+            int r = ((colour >> 6)&1)*255;
+            int g = ((colour >> 5)&1)*255;
+            int b = ((colour >> 4)&1)*255;
+            g2d = bi.createGraphics();
+            g2d.setColor(new Color(r, g, b));
+            if ((colour&1) > 0) g2d.fillRect(x * size + half, y * size, half, half);
+            if ((colour&2) > 0) g2d.fillRect(x * size, y * size, half, half);
+            if ((colour&4) > 0) g2d.fillRect(x * size + half, y * size + half, half, half);
+            if ((colour&8) > 0) g2d.fillRect(x * size, y * size + half, half, half);
+        }
     }
 
     static private void read_bytes(String filename, char data[]) {
