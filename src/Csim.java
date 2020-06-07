@@ -3,10 +3,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
-import java.io.BufferedInputStream;
-import java.io.DataInputStream;
-import java.io.EOFException;
-import java.io.FileInputStream;
+import java.io.*;
 import javax.swing.*;
 
 /*
@@ -20,6 +17,8 @@ public class Csim {
     static Graphics graphics = null;
     static BufferStrategy buffer = null;
     static long time = 0;
+    static char[] Vram = new char [0x8000];
+
 
     public static void main( String[] args ) {
 
@@ -100,8 +99,12 @@ public class Csim {
         canvas.addKeyListener(new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
-//                System.out.println("keyTyped");
-                keys = keys + e.getKeyChar();
+                int d = e.getKeyChar();
+                if (d == 19) {
+                    save_screen();
+                } else {
+                    keys = keys + e.getKeyChar();
+                }
             }
 
             @Override
@@ -188,7 +191,6 @@ public class Csim {
         char[] DecodeRom = new char [0x20000];
         char[] Rom = new char [0x8000];
         char[] Ram = new char [0x8000];
-        char[] Vram = new char [0x8000];
 
 
         try {
@@ -441,6 +443,19 @@ public class Csim {
                 data[addr++] = (char) in.readUnsignedByte();
             }
         } catch (EOFException e) {
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    static private void save_screen() {
+        String filename = "screen.bin";
+        try {
+            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(filename)));
+            for (int address = 0; address < 0x8000; address++) {
+                out.writeByte(Vram[address]);
+            }
+            out.close();
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
