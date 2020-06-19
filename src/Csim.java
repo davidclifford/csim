@@ -427,11 +427,34 @@ public class Csim {
             int g = ((colour >> 5)&1)*255;
             int b = ((colour >> 4)&1)*255;
             g2d = bi.createGraphics();
-            g2d.setColor(new Color(r, g, b));
-            if ((colour&1) > 0) g2d.fillRect(x * size + half, y * size, half, half);
-            if ((colour&2) > 0) g2d.fillRect(x * size, y * size, half, half);
-            if ((colour&4) > 0) g2d.fillRect(x * size + half, y * size + half, half, half);
-            if ((colour&8) > 0) g2d.fillRect(x * size, y * size + half, half, half);
+            if ((colour&1) > 0) {
+                g2d.setColor(new Color(r, g, b));
+                g2d.fillRect(x * size + half, y * size, half, half);
+            } else {
+                g2d.setColor(new Color(0, 0, 0));
+                g2d.fillRect(x * size + half, y * size, half, half);
+            }
+            if ((colour&2) > 0) {
+                g2d.setColor(new Color(r, g, b));
+                g2d.fillRect(x * size, y * size, half, half);
+            } else {
+                g2d.setColor(new Color(0, 0, 0));
+                g2d.fillRect(x * size, y * size, half, half);
+            }
+            if ((colour&4) > 0) {
+                g2d.setColor(new Color(r, g, b));
+                g2d.fillRect(x * size + half, y * size + half, half, half);
+            } else {
+                g2d.setColor(new Color(0, 0, 0));
+                g2d.fillRect(x * size + half, y * size + half, half, half);
+            }
+            if ((colour&8) > 0) {
+                g2d.setColor(new Color(r, g, b));
+                g2d.fillRect(x * size, y * size + half, half, half);
+            } else {
+                g2d.setColor(new Color(0, 0, 0));
+                g2d.fillRect(x * size, y * size + half, half, half);
+            }
         }
     }
 
