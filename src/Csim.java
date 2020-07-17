@@ -426,6 +426,12 @@ public class Csim {
             int r = ((colour >> 6)&1)*255;
             int g = ((colour >> 5)&1)*255;
             int b = ((colour >> 4)&1)*255;
+            // Use Orange as colour 0 (not black)
+            if (r+g+b == 0) {
+                r = 3<<6;
+                g = 4<<4;
+                b = 0;
+            }
             g2d = bi.createGraphics();
             if ((colour&1) > 0) {
                 g2d.setColor(new Color(r, g, b));
