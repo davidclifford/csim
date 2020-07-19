@@ -27,6 +27,8 @@ public class Csim {
 
         boolean debug = false;
         int PC = 0x8000;
+        boolean single = false;
+        boolean video = true;
 
         String executable = "stripes.bin";
         if (args.length > 0) {
@@ -35,6 +37,10 @@ public class Csim {
                     PC = 0x0000;
                 } else if (arg.equals("-d")) {
                     debug = true;
+                } else if (arg.equals("-s")) {
+                    single = true;
+                } else if (arg.equals("-v")) {
+                    video = false;
                 } else if (arg.startsWith("-")) {
                         System.out.printf("Unknown option %s", arg);
                         System.exit(1);
@@ -58,6 +64,7 @@ public class Csim {
         frame.add( canvas );
         frame.pack();
         frame.setVisible( true );
+        if (!video) frame.setState(Frame.ICONIFIED);
 
         // Create BackBuffer...
         canvas.createBufferStrategy( 2 );
@@ -109,12 +116,10 @@ public class Csim {
 
             @Override
             public void keyPressed(KeyEvent e) {
-
             }
 
             @Override
             public void keyReleased(KeyEvent e) {
-
             }
         });
         canvas.setFocusable(true);
@@ -227,6 +232,10 @@ public class Csim {
                 if (debug) {
                     System.out.printf("PC %04x IR %02x p %01x ui %04x upa %d%d%d \n",
                             PC, IR, phase, uinst, usreset, pcincr, arena);
+                }
+                if (single) {
+                    // Wait one second
+                    wait(1000);
                 }
 
                 // Do the ALU operation.
@@ -487,6 +496,18 @@ public class Csim {
             out.close();
         } catch (Exception e) {
             System.out.println(e.getMessage());
+        }
+    }
+
+    public static void wait(int ms)
+    {
+        try
+        {
+            Thread.sleep(ms);
+        }
+        catch(InterruptedException ex)
+        {
+            Thread.currentThread().interrupt();
         }
     }
 }
