@@ -4,6 +4,10 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 import javax.swing.*;
 
 /*
@@ -18,7 +22,8 @@ public class Csim {
     static BufferStrategy buffer = null;
     static long time = 0;
     static char[] Vram = new char [0x8000];
-
+    static Map<Integer,Color> background = new HashMap<>();
+    static boolean refresh = false;
 
     public static void main( String[] args ) {
 
@@ -327,8 +332,11 @@ public class Csim {
                         if (debug)
                             System.out.printf("->RAM %04x %02x\n", address - 0x8000, (byte)Ram[address - 0x8000]);
                     } else {
-                        plot(address, databus);
                         Vram[address] = (char)databus;
+                        if (plot(address, databus)) {
+                            refresh = true;
+                        }
+
                         if (debug)
                             System.out.printf("->VRAM %04x %02x\n", address, (byte)Vram[address]);
                     }
@@ -400,6 +408,10 @@ public class Csim {
                 // Do graphics
                 // Blit image and flip every so often
                 if (System.currentTimeMillis() - time > 20) {
+                    if (refresh) {
+                        refreshScreen();
+                        refresh = false;
+                    }
                     graphics = buffer.getDrawGraphics();
                     graphics.drawImage(bi, 0, 0, null);
                     if (!buffer.contentsLost())
@@ -419,18 +431,58 @@ public class Csim {
         }
     }
 
-    static private void plot(int addr, int colour) {
+    static private Color getBackgroundColour(int addr) {
+        Color colour = new Color(0,0,0);
+        Map<Integer,Color>  sorted = background.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                         Map.Entry::getValue, (oldValue, newValue) -> oldValue,
+                         LinkedHashMap::new));
+        for (Map.Entry<Integer, Color> entry : sorted.entrySet()) {
+            if (entry.getKey() <= addr) {
+                colour = entry.getValue();
+            }
+        }
+        return colour;
+    }
+
+    static private void refreshScreen(){
+        for (int y=0; y<120; y++) {
+            for (int x=0; x<160; x++) {
+                int addr = y<< 8 | x;
+                plot(addr, Vram[addr]);
+            }
+        }
+    }
+
+    static private boolean plot(int addr, int colour) {
         final int size = 8;
         final int half = size/2;
         int x = addr & 0xFF;
         int y = addr >> 8;
+        boolean refresh = false;
+
         if (colour < 128) {
-            int r = ((colour >> 4) & 3) << 6;
-            int g = ((colour >> 2) & 3) << 6;
-            int b = ((colour & 3) << 6);
-            g2d = bi.createGraphics();
-            g2d.setColor(new Color(r, g, b));
-            g2d.fillRect(x * size, y * size, size, size);
+            if (colour < 64) {
+                int r = ((colour >> 4) & 3) << 6;
+                int g = ((colour >> 2) & 3) << 6;
+                int b = ((colour & 3) << 6);
+                g2d = bi.createGraphics();
+                g2d.setColor(new Color(r, g, b));
+                g2d.fillRect(x * size, y * size, size, size);
+                if (background.remove(addr) != null)
+                    refresh = true;
+            } else {
+                int r = ((colour >> 4) & 3) << 6;
+                int g = ((colour >> 2) & 3) << 6;
+                int b = ((colour & 3) << 6);
+                g2d = bi.createGraphics();
+                Color col = new Color(r, g, b);
+                g2d.setColor(col);
+                g2d.fillRect(x * size, y * size, size, size);
+                background.put(addr, col);
+                refresh = true;
+            }
         } else {
             int r = ((colour >> 6)&1)*255;
             int g = ((colour >> 5)&1)*255;
@@ -442,35 +494,39 @@ public class Csim {
                 b = 0;
             }
             g2d = bi.createGraphics();
+            Color back = getBackgroundColour(addr);
             if ((colour&1) > 0) {
                 g2d.setColor(new Color(r, g, b));
                 g2d.fillRect(x * size + half, y * size, half, half);
             } else {
-                g2d.setColor(new Color(0, 0, 0));
+                g2d.setColor(back);
                 g2d.fillRect(x * size + half, y * size, half, half);
             }
             if ((colour&2) > 0) {
                 g2d.setColor(new Color(r, g, b));
                 g2d.fillRect(x * size, y * size, half, half);
             } else {
-                g2d.setColor(new Color(0, 0, 0));
+                g2d.setColor(back);
                 g2d.fillRect(x * size, y * size, half, half);
             }
             if ((colour&4) > 0) {
                 g2d.setColor(new Color(r, g, b));
                 g2d.fillRect(x * size + half, y * size + half, half, half);
             } else {
-                g2d.setColor(new Color(0, 0, 0));
+                g2d.setColor(back);
                 g2d.fillRect(x * size + half, y * size + half, half, half);
             }
             if ((colour&8) > 0) {
                 g2d.setColor(new Color(r, g, b));
                 g2d.fillRect(x * size, y * size + half, half, half);
             } else {
-                g2d.setColor(new Color(0, 0, 0));
+                g2d.setColor(back);
                 g2d.fillRect(x * size, y * size + half, half, half);
             }
+            if (background.remove(addr) != null)
+                refresh = true;
         }
+        return refresh;
     }
 
     static private void read_bytes(String filename, char data[]) {
