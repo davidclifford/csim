@@ -4,11 +4,9 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.Scanner;
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 /*
  * This is an example of a simple windowed render loop
@@ -20,6 +18,7 @@ public class Csim {
     static BufferedImage bi = null;
     static Graphics graphics = null;
     static BufferStrategy buffer = null;
+    static int PC = 0x8000;
     static long time = 0;
     static char[] Vram = new char [0x8000];
     static Color backgroundColour = new Color(0,0,0);
@@ -31,7 +30,6 @@ public class Csim {
         int  ysize = 960;
 
         boolean debug = false;
-        int PC = 0x8000;
         boolean single = false;
         boolean video = true;
 
@@ -93,8 +91,7 @@ public class Csim {
         frame.addKeyListener(new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
-//                System.out.println("keyTyped");
-                keys = keys + e.getKeyChar();
+//                keys = keys + e.getKeyChar();
             }
 
             @Override
@@ -112,8 +109,33 @@ public class Csim {
             @Override
             public void keyTyped(KeyEvent e) {
                 int d = e.getKeyChar();
-                if (d == 19) {
+                if (d == 19) { // ^S - Save screen
                     save_screen();
+                } else if (d == 27) { // Esc - Reset CPU
+                    keys = "";
+                    PC = 0;
+                } else if (d == 12) { // ^L - Load text file
+                    JFileChooser fileChooser = new JFileChooser();
+                    fileChooser.setCurrentDirectory(new File(System.getProperty("user.dir")));
+                    fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("Hex files", "hex"));
+                    int result = fileChooser.showOpenDialog(canvas);
+                    if (result == JFileChooser.APPROVE_OPTION) {
+                        try {
+                            String newKeys = "";
+                            File selectedFile = fileChooser.getSelectedFile();
+                            FileReader fr = new FileReader(selectedFile);   //Creation of File Reader object
+                            BufferedReader br = new BufferedReader(fr);  //Creation of BufferedReader object
+                            int c = 0;
+                            while ((c = br.read()) != -1)         //Read char by Char
+                            {
+                                char character = (char) c;          //converting integer to char
+                                newKeys = newKeys + character;
+                            }
+                            keys = keys + newKeys;
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }
                 } else {
                     keys = keys + e.getKeyChar();
                 }
