@@ -6,6 +6,7 @@ import java.awt.image.BufferedImage;
 import java.io.*;
 import java.util.Scanner;
 import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 /*
@@ -117,7 +118,9 @@ public class Csim {
                 } else if (d == 12) { // ^L - Load text file
                     JFileChooser fileChooser = new JFileChooser();
                     fileChooser.setCurrentDirectory(new File(System.getProperty("user.dir")));
-                    fileChooser.addChoosableFileFilter(new FileNameExtensionFilter("Hex files", "hex"));
+                    FileFilter hexFileFilter =new FileNameExtensionFilter("Hex files", "hex");
+                    fileChooser.addChoosableFileFilter(hexFileFilter);
+                    fileChooser.setFileFilter(hexFileFilter);
                     int result = fileChooser.showOpenDialog(canvas);
                     if (result == JFileChooser.APPROVE_OPTION) {
                         try {
