@@ -4,7 +4,7 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.util.Scanner;
+import java.lang.Math;
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.filechooser.FileNameExtensionFilter;
@@ -226,6 +226,11 @@ public class Csim {
         char[] DecodeRom = new char [0x20000];
         char[] Rom = new char [0x8000];
         char[] Ram = new char [0x8000];
+
+        // Randomise Ram
+        for(int i=0; i<Ram.length; i++) {
+            Ram[i] = (char)(256*Math.random());
+        }
 
 
         try {
