@@ -45,9 +45,13 @@ public class Csim {
                     single = true;
                 } else if (arg.equals("-v")) {
                     video = false;
+                } else if (arg.equals("-h")) {
+                    System.out.println("Usage: ./jsim -d -s -v -m [prg.bin]");
+                    System.out.println("d Debug, s Slow, v Minimised video, m Start in Monitor");
+                    System.exit(1);
                 } else if (arg.startsWith("-")) {
-                        System.out.printf("Unknown option %s", arg);
-                        System.exit(1);
+                    System.out.printf("Unknown option %s", arg);
+                    System.exit(1);
                 } else {
                     executable = arg;
                 }
@@ -92,7 +96,7 @@ public class Csim {
         frame.addKeyListener(new KeyListener() {
             @Override
             public void keyTyped(KeyEvent e) {
-//                keys = keys + e.getKeyChar();
+                keys = keys + e.getKeyChar();
             }
 
             @Override
