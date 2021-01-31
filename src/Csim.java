@@ -247,8 +247,16 @@ public class Csim {
             System.exit(1);
         }
 
+        long last = System.nanoTime();
+        long now = last;
         while( true ) {
             try {
+                // Cycle accurate timing
+                do {
+                    now = System.nanoTime();
+                } while (now - last < 159); // 160 ~ 6.3MHz
+                last = now;
+
                 // Work out the decode ROM index
                 int decodeidx = (IR << IRSHIFT) | phase;
                 // Get the microinstruction
