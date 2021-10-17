@@ -1,13 +1,12 @@
+import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.lang.Math;
-import javax.swing.*;
-import javax.swing.filechooser.FileFilter;
-import javax.swing.filechooser.FileNameExtensionFilter;
 
 /*
  * This is an example of a simple windowed render loop
@@ -25,33 +24,43 @@ public class Csim {
     static Color backgroundColour = new Color(0,0,0);
     static boolean refresh = false;
 
+    public static void usage() {
+        System.out.println("Usage: ./jsim -d -s -f -v -m -c [program.bin]");
+        System.out.println("d Debug, s Slow, f Fast, v Minimised video, m Start in Monitor, c Cycle acurate");
+        System.exit(1);
+    }
+
     public static void main( String[] args ) {
 
         int  xsize = 1280;
         int  ysize = 960;
 
         boolean debug = false;
-        boolean single = false;
+        boolean slow = false;
         boolean video = true;
+        boolean fast = false;
+        boolean cycle = false;
 
-        String executable = "stripes.bin";
+        String executable = null;
         if (args.length > 0) {
             for (String arg: args){
                 if (arg.equals("-m")) {
                     PC = 0x0000;
                 } else if (arg.equals("-d")) {
                     debug = true;
+                } else if (arg.equals("-c")) {
+                    cycle = true;
+                } else if (arg.equals("-f")) {
+                    fast = true;
                 } else if (arg.equals("-s")) {
-                    single = true;
+                    slow = true;
                 } else if (arg.equals("-v")) {
                     video = false;
                 } else if (arg.equals("-h")) {
-                    System.out.println("Usage: ./jsim -d -s -v -m [prg.bin]");
-                    System.out.println("d Debug, s Slow, v Minimised video, m Start in Monitor");
-                    System.exit(1);
+                    usage();
                 } else if (arg.startsWith("-")) {
-                    System.out.printf("Unknown option %s", arg);
-                    System.exit(1);
+                    System.out.printf("Unknown option %s\n", arg);
+                    usage();
                 } else {
                     executable = arg;
                 }
@@ -241,7 +250,11 @@ public class Csim {
             read_bytes("alu.bin", ALURom);
             read_bytes("27Cucode.rom", DecodeRom);
             read_bytes("instr.bin", Rom);
-            read_bytes(executable, Ram);
+            if (executable != null) {
+                read_bytes(executable, Ram);
+            } else {
+                PC = 0x000;
+            }
         } catch(Exception e) {
             System.out.println(e.getMessage());
             System.exit(1);
@@ -252,9 +265,11 @@ public class Csim {
         while( true ) {
             try {
                 // Cycle accurate timing
-                do {
-                    now = System.nanoTime();
-                } while (now - last < 159); // 160 ~ 6.3MHz
+                if (cycle) {
+                    do {
+                        now = System.nanoTime();
+                    } while (now - last < 320); // 320 ~ 3.15MHz
+                }
                 last = now;
 
                 // Work out the decode ROM index
@@ -280,7 +295,7 @@ public class Csim {
                     System.out.printf("PC %04x IR %02x p %01x ui %04x upa %d%d%d \n",
                             PC, IR, phase, uinst, usreset, pcincr, arena);
                 }
-                if (single) {
+                if (slow) {
                     // Wait one second
                     wait(1000);
                 }
@@ -456,7 +471,8 @@ public class Csim {
                 }
 
                 // Let the OS have a little time...
-                Thread.yield();
+                if (!fast)
+                    Thread.yield();
             } finally {
                 // release resources
                 if( graphics != null )
