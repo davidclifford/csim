@@ -578,6 +578,12 @@ public class Csim {
         }
     }
 
+    static private String int2hex(int i) {
+        String hex = Integer.toHexString(i);
+        if (hex.length()==1) hex = "0"+hex;
+        return hex;
+    }
+
     static private void save_screen() {
         String filename = "screen.bin";
         try {
@@ -589,6 +595,28 @@ public class Csim {
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
+
+        filename = "screen.hex";
+        try {
+            FileOutputStream outputStream = new FileOutputStream(filename);
+            OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream, "UTF-8");
+            BufferedWriter bufferedWriter = new BufferedWriter(outputStreamWriter);
+
+            for (int y=0; y<120; y++) {
+                bufferedWriter.write("C" + int2hex(y) + "00\n");
+                for (int x=0; x<160; x++) {
+                    int addr = y*256 + x;
+                    int b = Vram[addr];
+                    String hex = int2hex(b);
+                    bufferedWriter.write(hex+" ");
+                }
+                bufferedWriter.write("z\n");
+            }
+            bufferedWriter.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     public static void wait(int ms)
