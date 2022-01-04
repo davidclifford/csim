@@ -23,6 +23,8 @@ public class Csim {
     static char[] Vram = new char [0x8000];
     static Color backgroundColour = new Color(0,0,0);
     static boolean refresh = false;
+    static boolean fast = false;
+    static int cycle_speed = 0;
 
     public static void usage() {
         System.out.println("Usage: ./jsim -d -s -f -v -m -c [program.bin]");
@@ -38,8 +40,7 @@ public class Csim {
         boolean debug = false;
         boolean slow = false;
         boolean video = true;
-        boolean fast = false;
-        boolean cycle = false;
+
 
         String executable = null;
         if (args.length > 0) {
@@ -49,7 +50,7 @@ public class Csim {
                 } else if (arg.equals("-d")) {
                     debug = true;
                 } else if (arg.equals("-c")) {
-                    cycle = true;
+                    cycle_speed = 320;
                 } else if (arg.equals("-f")) {
                     fast = true;
                 } else if (arg.equals("-s")) {
@@ -125,6 +126,19 @@ public class Csim {
                 int d = e.getKeyChar();
                 if (d == 19) { // ^S - Save screen
                     save_screen();
+                } else if (d == 6) { // ^F - Fast mode toggle
+                    fast = !fast;
+                    cycle_speed = 0;
+                } else if (d == 14) { // ^N - Normal speed
+                    fast = false;
+                    cycle_speed = 0;
+                } else if (d == 3) { // ^C - Toggle cycle accurate speed
+                    if (cycle_speed != 320) {
+                        cycle_speed = 320;
+                    } else {
+                        cycle_speed = 160;
+                    }
+                    fast = false;
                 } else if (d == 27) { // Esc - Reset CPU
                     keys = "";
                     PC = 0;
@@ -265,10 +279,10 @@ public class Csim {
         while( true ) {
             try {
                 // Cycle accurate timing
-                if (cycle) {
+                if (cycle_speed > 0) {
                     do {
                         now = System.nanoTime();
-                    } while (now - last < 320); // 320 ~ 3.15MHz
+                    } while (now - last < cycle_speed); // 320 ~ 3.15MHz
                 }
                 last = now;
 
@@ -471,7 +485,7 @@ public class Csim {
                 }
 
                 // Let the OS have a little time...
-                if (!fast)
+                if (!fast && cycle_speed == 0)
                     Thread.yield();
             } finally {
                 // release resources
@@ -499,26 +513,17 @@ public class Csim {
         int x = addr & 0xFF;
         int y = addr >> 8;
 
-        // Is current pixel a background pixel?
-        if (current >= 64 && current < 128)
-            refresh = true;
-
         if (colour < 128) {
-            if (colour < 64) {
-                int r = ((colour >> 4) & 3)*85;
-                int g = ((colour >> 2) & 3)*85;
-                int b = ((colour & 3) * 85);
-                g2d = bi.createGraphics();
-                g2d.setColor(new Color(r, g, b));
-                g2d.fillRect(x * size, y * size, size, size);
-            } else {
-                int r = ((colour >> 4) & 3)*85;
-                int g = ((colour >> 2) & 3)*85;
-                int b = ((colour & 3)*85);
-                g2d = bi.createGraphics();
-                Color col = new Color(r, g, b);
-                g2d.setColor(col);
-                g2d.fillRect(x * size, y * size, size, size);
+            int r = ((colour >> 4) & 3)*85;
+            int g = ((colour >> 2) & 3)*85;
+            int b = ((colour & 3) * 85);
+
+            g2d = bi.createGraphics();
+            Color col = new Color(r, g, b);
+            g2d.setColor(col);
+            g2d.fillRect(x * size, y * size, size, size);
+
+            if (colour >= 64) {
                 backgroundColour = col;
                 refresh = true;
             }
@@ -534,29 +539,30 @@ public class Csim {
             }
             g2d = bi.createGraphics();
             Color back = backgroundColour;
+            Color fore = new Color(r, g, b);
             if ((colour&1) > 0) {
-                g2d.setColor(new Color(r, g, b));
+                g2d.setColor(fore);
                 g2d.fillRect(x * size + half, y * size, half, half);
             } else {
                 g2d.setColor(back);
                 g2d.fillRect(x * size + half, y * size, half, half);
             }
             if ((colour&2) > 0) {
-                g2d.setColor(new Color(r, g, b));
+                g2d.setColor(fore);
                 g2d.fillRect(x * size, y * size, half, half);
             } else {
                 g2d.setColor(back);
                 g2d.fillRect(x * size, y * size, half, half);
             }
             if ((colour&4) > 0) {
-                g2d.setColor(new Color(r, g, b));
+                g2d.setColor(fore);
                 g2d.fillRect(x * size + half, y * size + half, half, half);
             } else {
                 g2d.setColor(back);
                 g2d.fillRect(x * size + half, y * size + half, half, half);
             }
             if ((colour&8) > 0) {
-                g2d.setColor(new Color(r, g, b));
+                g2d.setColor(fore);
                 g2d.fillRect(x * size, y * size + half, half, half);
             } else {
                 g2d.setColor(back);
