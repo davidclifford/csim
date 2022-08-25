@@ -21,6 +21,10 @@ public class Csim {
     static int PC = 0x8000;
     static long time = 0;
     static char[] Vram = new char [0x8000];
+    static char[] SSD = new char [0x80000];
+    static int SSD_state = 0;
+    private static final int BANK_ADDR = 0xF000;
+    static int BANK = 0;
     static Color backgroundColour = new Color(0,0,0);
     static boolean refresh = false;
     static boolean fast = false;
@@ -363,7 +367,13 @@ public class Csim {
                     if (address >= 0x8000)
                         databus = (char)Vram[address-0x8000];
                     else
-                        databus = (char)Vram[address];
+                        if (BANK == 0) {
+                            databus = (char) Vram[address];
+                        } else if (BANK >= 0xF0){
+                            databus = (char) SSD[(address & 0x7fff) + 0x8000*(BANK&0x0F)];
+                        } else {
+                            databus = 0;
+                        }
                 }
 
                 // Read UART
@@ -398,15 +408,27 @@ public class Csim {
                         System.out.printf("->B %02x\n", B);
                 }
                 if (loadop == 4) {
+                    // Memory mapped I/O - BANK
+                    if (address == BANK_ADDR) {
+                        BANK = databus;
+                    }
+                    // RAM
                     if (address >= 0x8000) {
                         Ram[address - 0x8000] = (char)databus;
                         if (debug)
                             System.out.printf("->RAM %04x %02x\n", address - 0x8000, (byte)Ram[address - 0x8000]);
                     } else {
-                        plot(address, databus,  Vram[address]);
-                        Vram[address] = (char)databus;
-                        if (debug)
-                            System.out.printf("->VRAM %04x %02x\n", address, (byte)Vram[address]);
+                        // Use BANK register to determine VGA or SSD memory
+                        if (BANK == 0) {
+                            plot(address, databus, Vram[address]);
+                            Vram[address] = (char) databus;
+                            if (debug)
+                                System.out.printf("->VRAM %04x %02x\n", address, (byte) Vram[address]);
+                        } else if (BANK >= 0xF0) {
+                            set_ssd(address, databus);
+                            if (debug)
+                                System.out.printf("->SSD [%02x] %04x %02x\n", BANK, address, (byte) Vram[address]);
+                        }
                     }
                 }
                 if (loadop == 5) {
@@ -495,6 +517,54 @@ public class Csim {
                     g2d.dispose();
             }
         }
+    }
+
+    private static final int STEP_0 = 0;
+    private static final int STEP_1 = 1;
+    private static final int STEP_2 = 2;
+    private static final int STEP_3 = 3;
+    private static final int STEP_4 = 4;
+    private static final int STEP_5 = 5;
+    private static final int BYTE_WRITE = 6;
+
+    // Set SSD data according to state machine
+    static private void set_ssd(int address, int data) {
+        if (SSD_state == STEP_0 && address == 0x5555 && data == 0xAA)
+            SSD_state = STEP_1;
+        else if (SSD_state == STEP_1 && address == 0x2AAA && data == 0x55)
+            SSD_state = STEP_2;
+        else if (SSD_state == STEP_2 && address == 0x5555 && data == 0xA0)
+            SSD_state = BYTE_WRITE;
+        else if (SSD_state == BYTE_WRITE && BANK >= 0xF0) {
+            int addr = (address & 0x7FFF) + 0x8000 * (BANK & 0x0F);
+            if (SSD[addr] == 0xFF) {
+                SSD[address] = (char) data;
+            }
+            SSD_state = STEP_0;
+        }
+        else if (SSD_state == STEP_2 && address == 0x5555 && data == 0x80)
+            SSD_state = STEP_3;
+        else if (SSD_state == STEP_3 && address == 0x5555 && data == 0xAA)
+            SSD_state = STEP_4;
+        else if (SSD_state == STEP_4 && address == 0x2AAA && data == 0x55)
+            SSD_state = STEP_5;
+        else if (SSD_state == STEP_5 && address == 0x5555 && data == 0x10) {
+            // Chip erase
+            for (int i=0; i<0x80000; i++) {
+                SSD[i] = 0xFF;
+            }
+        }
+        else if (SSD_state == STEP_5 && data == 0x30) {
+            // Sector erase
+            int addr = (address & 0x7FFF) + 0x8000 * (BANK & 0x0F);
+            int sec = addr & 0xFF000;
+            for (int i=0; i<0x1000; i++) {
+                SSD[sec+i] = 0xFF;
+            }
+        }
+        else
+            SSD_state = STEP_0;
+        return;
     }
 
     static private void refreshScreen(){
