@@ -31,8 +31,8 @@ public class Csim {
     static int cycle_speed = 0;
 
     public static void usage() {
-        System.out.println("Usage: ./jsim -d -s -f -v -m -c [program.bin]");
-        System.out.println("d Debug, s Slow, f Fast, v Minimised video, m Start in Monitor, c Cycle acurate");
+        System.out.println("Usage: ./jsim -d -s -f -v -m -c [program.bin] [start execution");
+        System.out.println("d Debug, s Slow, f Fast, v Minimised video, m Start in Monitor, c Cycle accurate");
         System.exit(1);
     }
 
@@ -44,13 +44,15 @@ public class Csim {
         boolean debug = false;
         boolean slow = false;
         boolean video = true;
+        boolean start_in_monitor = false;
 
+        int start_address = 0x0000;
 
         String executable = null;
         if (args.length > 0) {
             for (String arg: args){
                 if (arg.equals("-m")) {
-                    PC = 0x0000;
+                    start_in_monitor = true;
                 } else if (arg.equals("-d")) {
                     debug = true;
                 } else if (arg.equals("-c")) {
@@ -67,10 +69,27 @@ public class Csim {
                     System.out.printf("Unknown option %s\n", arg);
                     usage();
                 } else {
-                    executable = arg;
+                    if (executable == null) {
+                        executable = arg;
+                        start_address = 0x8000;
+                    } else {
+                        try {
+                            start_address = Integer.parseInt(arg, 16);
+                            if (start_address < 0 || start_address > 0xffff) {
+                                System.out.println("Starting hex address must be between 0000 and FFFF");
+                                usage();
+                            }
+                        } catch (java.lang.NumberFormatException e) {
+                            System.out.println("Expected hex address, must be between 0000 and FFFF");
+                            usage();
+                        }
+                    }
                 }
             }
         }
+
+        if (executable == null)
+            start_in_monitor = true;
 
         // Create game window...
         JFrame frame = new JFrame();
@@ -133,6 +152,9 @@ public class Csim {
                 } else if (d == 6) { // ^F - Fast mode toggle
                     fast = !fast;
                     cycle_speed = 0;
+                } else if (d == 24) { // ^X - eXit & save SSD
+                    write_bytes("ssd.bin", SSD);
+                    System.exit(0);
                 } else if (d == 14) { // ^N - Normal speed
                     fast = false;
                     cycle_speed = 0;
@@ -265,18 +287,27 @@ public class Csim {
 
 
         try {
-            read_bytes("alu.bin", ALURom);
-            read_bytes("27Cucode.rom", DecodeRom);
-            read_bytes("instr.bin", Rom);
+            read_bytes("alu.bin", ALURom, 0);
+            read_bytes("27Cucode.rom", DecodeRom, 0);
+            read_bytes("instr.bin", Rom, 0);
+            read_bytes("ssd.bin", SSD, 0);
             if (executable != null) {
-                read_bytes(executable, Ram);
+                if (start_address >= 0x8000) {
+                    read_bytes(executable, Ram, start_address - 0x8000);
+                } else {
+                    read_bytes(executable, Ram, 0);
+                }
+                PC = start_address;
             } else {
-                PC = 0x000;
+                PC = 0x0000;
             }
         } catch(Exception e) {
             System.out.println(e.getMessage());
             System.exit(1);
         }
+
+        if (start_in_monitor)
+            PC = 0x0000;
 
         long last = System.nanoTime();
         long now = last;
@@ -425,7 +456,7 @@ public class Csim {
                             if (debug)
                                 System.out.printf("->VRAM %04x %02x\n", address, (byte) Vram[address]);
                         } else if (BANK >= 0xF0) {
-                            set_ssd(address, databus);
+                            set_ssd(address, databus, debug);
                             if (debug)
                                 System.out.printf("->SSD [%02x] %04x %02x\n", BANK, address, (byte) Vram[address]);
                         }
@@ -519,7 +550,9 @@ public class Csim {
         }
     }
 
-    private static final int STEP_0 = 0;
+    // SSD stuff
+
+    private static final int STEP_RESET = 0;
     private static final int STEP_1 = 1;
     private static final int STEP_2 = 2;
     private static final int STEP_3 = 3;
@@ -528,8 +561,10 @@ public class Csim {
     private static final int BYTE_WRITE = 6;
 
     // Set SSD data according to state machine
-    static private void set_ssd(int address, int data) {
-        if (SSD_state == STEP_0 && address == 0x5555 && data == 0xAA)
+    static private void set_ssd(int address, int data, boolean debug) {
+        if (debug)
+            System.out.printf("Step [%d] addr [%04x], data [%02x]\n", SSD_state, address, data);
+        if (SSD_state == STEP_RESET && address == 0x5555 && data == 0xAA)
             SSD_state = STEP_1;
         else if (SSD_state == STEP_1 && address == 0x2AAA && data == 0x55)
             SSD_state = STEP_2;
@@ -538,9 +573,9 @@ public class Csim {
         else if (SSD_state == BYTE_WRITE && BANK >= 0xF0) {
             int addr = (address & 0x7FFF) + 0x8000 * (BANK & 0x0F);
             if (SSD[addr] == 0xFF) {
-                SSD[address] = (char) data;
+                SSD[addr] = (char) data;
             }
-            SSD_state = STEP_0;
+            SSD_state = STEP_RESET;
         }
         else if (SSD_state == STEP_2 && address == 0x5555 && data == 0x80)
             SSD_state = STEP_3;
@@ -553,6 +588,7 @@ public class Csim {
             for (int i=0; i<0x80000; i++) {
                 SSD[i] = 0xFF;
             }
+            SSD_state = STEP_RESET;
         }
         else if (SSD_state == STEP_5 && data == 0x30) {
             // Sector erase
@@ -561,10 +597,10 @@ public class Csim {
             for (int i=0; i<0x1000; i++) {
                 SSD[sec+i] = 0xFF;
             }
+            SSD_state = STEP_RESET;
         }
         else
-            SSD_state = STEP_0;
-        return;
+            SSD_state = STEP_RESET;
     }
 
     static private void refreshScreen(){
@@ -641,14 +677,26 @@ public class Csim {
         }
     }
 
-    static private void read_bytes(String filename, char data[]) {
+    static private void read_bytes(String filename, char data[], int addr) {
         try {
             DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(filename)));
-            int addr = 0;
             while (true) {
                 data[addr++] = (char) in.readUnsignedByte();
             }
         } catch (EOFException e) {
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    static private void write_bytes(String filename, char data[]) {
+        try {
+            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(filename)));
+            int addr = 0;
+            while (addr < data.length) {
+                out.write(data[addr++]);
+            }
+            out.flush();
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
