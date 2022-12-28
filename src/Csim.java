@@ -22,6 +22,7 @@ public class Csim {
     static long time = 0;
     static char[] Vram = new char [0x8000];
     static char[] SSD = new char [0x80000];
+    static char[] SQU = new char [0x80000];
     static int SSD_state = 0;
     private static final int BANK_ADDR = 0xF000;
     static int BANK = 0;
@@ -36,6 +37,27 @@ public class Csim {
         System.exit(1);
     }
 
+    public static char[] calculate_x2over4() {
+        for (int x = 0; x < 0x40000; x += 4) {
+            int n = x / 4;
+            if (x >= 0x20000)
+                n = (0x40000 - x) / 4;
+            int x2o4 = (n * n) / 4;
+            int x2 = n * n;
+            // n^2/4 Store big-endian
+            SQU[x + 0] = (char) ((x2o4>>24) % 256);
+            SQU[x + 1] = (char) ((x2o4>>16) % 256);
+            SQU[x + 2] = (char) ((x2o4>>8) % 256);
+            SQU[x + 3] = (char) (x2o4 % 256);
+
+            // n^2
+            SQU[x + 0 + 0x40000] = (char) ((x2>>24) % 256);
+            SQU[x + 1 + 0x40000] = (char) ((x2>>16) % 256);
+            SQU[x + 2 + 0x40000] = (char) ((x2>>8) % 256);
+            SQU[x + 3 + 0x40000] = (char) (x2 % 256);
+        }
+        return SQU;
+    }
     public static void main( String[] args ) {
 
         int  xsize = 1280;
@@ -291,6 +313,7 @@ public class Csim {
             read_bytes("27Cucode.rom", DecodeRom, 0);
             read_bytes("instr.bin", Rom, 0);
             read_bytes("ssd.bin", SSD, 0);
+            SQU = calculate_x2over4();
             if (executable != null) {
                 if (start_address >= 0x8000) {
                     read_bytes(executable, Ram, start_address - 0x8000);
@@ -398,10 +421,12 @@ public class Csim {
                     if (address >= 0x8000)
                         databus = (char)Vram[address-0x8000];
                     else
-                        if (BANK == 0) {
+                        if (BANK < 0x10) {
                             databus = (char) Vram[address];
-                        } else if (BANK >= 0xF0){
-                            databus = (char) SSD[(address & 0x7fff) + 0x8000*(BANK&0x0F)];
+                        } else if (BANK >= 0xF0) {
+                            databus = (char) SSD[(address & 0x7fff) + 0x8000 * (BANK & 0x0F)];
+                        } else if (BANK >= 0x10 && BANK < 0x20) {
+                            databus = SQU[(address & 0x7fff) +  0x8000 * (BANK & 0x0F)];
                         } else {
                             databus = 0;
                         }
