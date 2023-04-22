@@ -22,7 +22,6 @@ public class Csim {
     static long time = 0;
     static char[] Vram = new char [0x8000];
     static char[] SSD = new char [0x80000];
-    static char[] SQU = new char [0x80000];
     static int SSD_state = 0;
     private static final int BANK_ADDR = 0xF000;
     static int BANK = 0;
@@ -30,6 +29,8 @@ public class Csim {
     static boolean refresh = false;
     static boolean fast = false;
     static int cycle_speed = 0;
+    static short MREG0 = 0;
+    static short MREG1 = 0;
 
     public static void usage() {
         System.out.println("Usage: ./jsim -d -s -f -v -m -c [program.bin] [start execution");
@@ -37,27 +38,6 @@ public class Csim {
         System.exit(1);
     }
 
-    public static char[] calculate_x2over4() {
-        for (int x = 0; x < 0x40000; x += 4) {
-            int n = x / 4;
-            if (x >= 0x20000)
-                n = (0x40000 - x) / 4;
-            int x2o4 = (n * n) / 4;
-            int x2 = n * n;
-            // n^2/4 Store big-endian
-            SQU[x + 0] = (char) ((x2o4>>24) % 256);
-            SQU[x + 1] = (char) ((x2o4>>16) % 256);
-            SQU[x + 2] = (char) ((x2o4>>8) % 256);
-            SQU[x + 3] = (char) (x2o4 % 256);
-
-            // n^2
-            SQU[x + 0 + 0x40000] = (char) ((x2>>24) % 256);
-            SQU[x + 1 + 0x40000] = (char) ((x2>>16) % 256);
-            SQU[x + 2 + 0x40000] = (char) ((x2>>8) % 256);
-            SQU[x + 3 + 0x40000] = (char) (x2 % 256);
-        }
-        return SQU;
-    }
     public static void main( String[] args ) {
 
         int  xsize = 1280;
@@ -66,6 +46,7 @@ public class Csim {
         boolean debug = false;
         boolean slow = false;
         boolean video = true;
+        boolean extended = false;
         boolean start_in_monitor = false;
 
         int start_address = 0x0000;
@@ -85,6 +66,8 @@ public class Csim {
                     slow = true;
                 } else if (arg.equals("-v")) {
                     video = false;
+                } else if (arg.equals("-e")) {
+                    extended = true;
                 } else if (arg.equals("-h")) {
                     usage();
                 } else if (arg.startsWith("-")) {
@@ -236,6 +219,7 @@ public class Csim {
         int AL = 0;
         int IR = 0;
         int phase = 0;
+        int FR = 0;
 
         int ALUOP    = 0x001f;
         int LOADOP   = 0x0007;
@@ -251,6 +235,7 @@ public class Csim {
         int USRESET  = 0x0001;
         int USSHIFT = 15; // Active low
         int IRSHIFT  = 4;
+        int FRSHIFT = 4 + 8;
         int CSHIFT = 8;
         int VSHIFT = 9;
         int ZSHIFT = 10;
@@ -298,7 +283,7 @@ public class Csim {
 
         // Load in binary files for ALU, Decode, Rom, Ram and Vram
         char[] ALURom = new char [0x400000];
-        char[] DecodeRom = new char [0x20000];
+        char[] DecodeRom = new char [0x80000];
         char[] Rom = new char [0x8000];
         char[] Ram = new char [0x8000];
 
@@ -310,10 +295,12 @@ public class Csim {
 
         try {
             read_bytes("alu.bin", ALURom, 0);
-            read_bytes("27Cucode.rom", DecodeRom, 0);
+            if (extended)
+                read_bytes("27Cucode2.rom", DecodeRom, 0);
+            else
+                read_bytes("27Cucode.rom", DecodeRom, 0);
             read_bytes("instr.bin", Rom, 0);
             read_bytes("ssd.bin", SSD, 0);
-            SQU = calculate_x2over4();
             if (executable != null) {
                 if (start_address >= 0x8000) {
                     read_bytes(executable, Ram, start_address - 0x8000);
@@ -345,7 +332,7 @@ public class Csim {
                 last = now;
 
                 // Work out the decode ROM index
-                int decodeidx = (IR << IRSHIFT) | phase;
+                int decodeidx = (FR << FRSHIFT) | (IR << IRSHIFT) | phase;
                 // Get the microinstruction
                 int uinst = ((((char)DecodeRom[decodeidx*2+1]) << 8) | ((char)DecodeRom[decodeidx*2]));
 
@@ -381,6 +368,8 @@ public class Csim {
                         System.out.printf("AB %02x %02x %s %04x \n", A, B, ALUop[aluop], aluresult);
                     }
 
+                    // Store value of flags in FR if using extended CPU
+                    FR = extended ? (aluresult >> CSHIFT) & 0x0f : 0;
                     // Extract the flags from the result, and remove from the result
                     carry = ((aluresult >> CSHIFT) & 1) == 1;
                     overflow = ((aluresult >> VSHIFT) & 1) == 1;
@@ -425,8 +414,9 @@ public class Csim {
                             databus = (char) Vram[address];
                         } else if (BANK >= 0xF0) {
                             databus = (char) SSD[(address & 0x7fff) + 0x8000 * (BANK & 0x0F)];
-                        } else if (BANK >= 0x10 && BANK < 0x20) {
-                            databus = SQU[(address & 0x7fff) +  0x8000 * (BANK & 0x0F)];
+                        } else if (BANK == 0x10) {
+                            int mult = MREG0 * MREG1;
+                            databus = (mult >> ((3 - (address % 4))*8)) & 0xff;
                         } else {
                             databus = 0;
                         }
@@ -484,6 +474,17 @@ public class Csim {
                             set_ssd(address, databus, debug);
                             if (debug)
                                 System.out.printf("->SSD [%02x] %04x %02x\n", BANK, address, (byte) Vram[address]);
+                        } else if (BANK == 0x10) {
+                            int a = address % 4;
+                            if (a == 0) {
+                                MREG0 = (short) ((MREG0 & 0x00ff)| ((short)databus << 8));
+                            } else if (a==1) {
+                                MREG0 = (short) ((MREG0 & 0xff00) | ((short)databus << 0));
+                            } else if (a==2) {
+                                MREG1 = (short) ((MREG1 & 0x00ff) | ((short)databus << 8));
+                            } else if (a==3) {
+                                MREG1 = (short) ((MREG1 & 0xff00) | ((short)databus << 0));
+                            }
                         }
                     }
                 }
