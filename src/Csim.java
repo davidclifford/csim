@@ -283,13 +283,17 @@ public class Csim {
 
         // Load in binary files for ALU, Decode, Rom, Ram and Vram
         char[] ALURom = new char [0x400000];
-        char[] DecodeRom = new char [0x80000];
+        char[] DecodeRom = new char [0x20000];
         char[] Rom = new char [0x8000];
         char[] Ram = new char [0x8000];
 
         // Randomise Ram
         for(int i=0; i<Ram.length; i++) {
             Ram[i] = (char)(256*Math.random());
+        }
+
+        for(int i=0; i<Vram.length; i++) {
+            Vram[i] = (char)(256*Math.random());
         }
 
 
